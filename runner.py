@@ -100,8 +100,15 @@ class Runner:
             await asyncio.sleep(0.3)  # 조건검색 요청 속도 제한(초당 5건) 여유
         self._status("✅ 조건검색 시작\n감시 조건: " + ", ".join(selected.keys()))
 
-        def raw(seq, cond, code, signal, ts, initial=False):
-            name = resolver.resolve(code) if resolver else ""
+        loop = asyncio.get_running_loop()
+
+        async def raw(seq, cond, code, signal, ts, initial=False):
+            # 종목명 조회는 동기 HTTP 라서 이벤트 루프에서 직접 부르면 루프가 멈춘다
+            # (접속 직후 편입 종목이 많으면 웹서버가 응답 못 함). 스레드로 떠넘긴다.
+            if resolver:
+                name = await loop.run_in_executor(None, resolver.resolve, code)
+            else:
+                name = ""
             self.on_event(ConditionEvent(cond, seq, code, name, signal, ts, initial))
 
         await client.listen(raw, seq_to_name)

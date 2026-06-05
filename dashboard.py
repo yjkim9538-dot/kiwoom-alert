@@ -13,7 +13,7 @@ import logging
 import sys
 
 from config import ConfigError, load_settings
-from notifier import TelegramNotifier
+from notifier import make_notifier
 from runner import Runner
 from state import DashboardState
 from webserver import WebServer
@@ -27,11 +27,19 @@ log = logging.getLogger("dashboard")
 
 
 async def amain(settings):
-    notifier = TelegramNotifier(settings.telegram_bot_token, settings.telegram_chat_id)
+    notifier = make_notifier(settings)
     state = DashboardState(settings.watchlist, settings.environment)
     server = WebServer(state, settings.dashboard_port)
     await server.start()
     log.info("브라우저에서 http://localhost:%d 를 여세요.", settings.dashboard_port)
+
+    loop = asyncio.get_running_loop()
+
+    def _bg(fn, *args):
+        # 텔레그램 전송은 동기 HTTP 라서, 느리거나 차단된 망에서 호출하면
+        # 이벤트 루프가 통째로 멈춰 대시보드(SSE)까지 얼어붙는다.
+        # 별도 스레드로 던져 대시보드 응답성을 항상 보장한다.
+        loop.run_in_executor(None, fn, *args)
 
     def on_event(ev):
         entry = state.apply(ev)          # 상태 반영 (초기 스냅샷은 entry=None)
@@ -43,11 +51,11 @@ async def amain(settings):
         })
         if ev.initial or ev.flag not in settings.notify_on:
             return
-        notifier.notify_event(ev.condition, ev.code, ev.name, ev.signal, ev.ts)
+        _bg(notifier.notify_event, ev.condition, ev.code, ev.name, ev.signal, ev.ts)
 
     def on_status(text):
         if settings.notify_lifecycle:
-            notifier.send(text)
+            _bg(notifier.send, text)
         server.broadcast({"type": "status", "text": text})
 
     def on_conditions(selected):

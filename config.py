@@ -45,6 +45,7 @@ class Settings:
     notify_on: list = field(default_factory=lambda: ["insert", "delete"])
     resolve_stock_name: bool = True
     notify_lifecycle: bool = True
+    enable_telegram: bool = True  # False 면 텔레그램 없이 대시보드만 운영
     watchlist: dict = field(default_factory=dict)  # {종목코드: 종목명}
     dashboard_port: int = 8765
 
@@ -100,7 +101,12 @@ def load_settings(env_path: Path = None, config_path: Path = None) -> Settings:
             f"notify_on 값이 잘못됐습니다: {raw.get('notify_on')!r} (insert/delete 만 가능)"
         )
 
-    conditions = [str(c).strip() for c in (raw.get("conditions") or []) if str(c).strip()]
+    # conditions 는 리스트여야 하지만, 사용자가 "conditions: 골든크로스" 처럼
+    # 한 줄 문자열로 적으면 문자열이 글자 단위로 쪼개진다. 문자열이면 한 항목으로 감싼다.
+    raw_conditions = raw.get("conditions") or []
+    if isinstance(raw_conditions, str):
+        raw_conditions = [raw_conditions]
+    conditions = [str(c).strip() for c in raw_conditions if str(c).strip()]
     watchlist = _parse_watchlist(raw.get("watchlist") or [])
 
     dashboard_port = raw.get("dashboard_port", 8765)
@@ -109,16 +115,26 @@ def load_settings(env_path: Path = None, config_path: Path = None) -> Settings:
     except (TypeError, ValueError):
         raise ConfigError(f"dashboard_port 값이 잘못됐습니다: {dashboard_port!r} (숫자여야 함)")
 
+    # 텔레그램을 끄면(대시보드 전용 운영) 텔레그램 키는 없어도 된다.
+    enable_telegram = bool(raw.get("enable_telegram", True))
+    if enable_telegram:
+        telegram_bot_token = _require_env("TELEGRAM_BOT_TOKEN")
+        telegram_chat_id = _require_env("TELEGRAM_CHAT_ID")
+    else:
+        telegram_bot_token = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+        telegram_chat_id = (os.getenv("TELEGRAM_CHAT_ID") or "").strip()
+
     return Settings(
         app_key=_require_env("KIWOOM_APP_KEY"),
         secret_key=_require_env("KIWOOM_SECRET_KEY"),
-        telegram_bot_token=_require_env("TELEGRAM_BOT_TOKEN"),
-        telegram_chat_id=_require_env("TELEGRAM_CHAT_ID"),
+        telegram_bot_token=telegram_bot_token,
+        telegram_chat_id=telegram_chat_id,
         environment=environment,
         conditions=conditions,
         notify_on=notify_on,
         resolve_stock_name=bool(raw.get("resolve_stock_name", True)),
         notify_lifecycle=bool(raw.get("notify_lifecycle", True)),
+        enable_telegram=enable_telegram,
         watchlist=watchlist,
         dashboard_port=dashboard_port,
     )
@@ -132,6 +148,8 @@ def _parse_watchlist(items) -> dict:
       - "005930"            (코드만 — 이름은 실시간 조회로 채워짐)
       - {code: "005930", name: "삼성전자"}
     """
+    if isinstance(items, str):  # "watchlist: 005930" 처럼 한 줄로 적은 경우 방어
+        items = [items]
     result = {}
     for item in items:
         if isinstance(item, dict):

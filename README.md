@@ -122,6 +122,11 @@ python test_connection.py
 조건식 현황과 관심종목을 **브라우저에서 실시간으로** 보고 싶을 때 사용합니다.
 (텔레그램 알림도 함께 전송됩니다.)
 
+> 💡 **텔레그램 없이 대시보드만** 쓰려면 `config.yaml` 에 `enable_telegram: false` 로 두세요.
+> 텔레그램이 차단된 망이거나 브라우저로만 추적할 때 유용하며, 이 경우 `.env` 의
+> `TELEGRAM_*` 값이 없어도 됩니다. (텔레그램 전송은 백그라운드로 처리되어, 켜둔 상태에서
+> 텔레그램이 느리거나 막혀도 대시보드 실시간 갱신은 멈추지 않습니다.)
+
 - **Windows**: `run_dashboard.bat` 더블클릭 → 브라우저가 자동으로 열립니다.
 - **mac/Linux/서버**: `bash run_dashboard.sh`
 - 수동 실행: `python dashboard.py`
