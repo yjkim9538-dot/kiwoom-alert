@@ -151,7 +151,15 @@ class KiwoomConditionClient:
         - signal 은 "I"(편입) / "D"(이탈)
         - initial=True 는 조건검색 등록 직후 받은 "현재 편입 종목" 스냅샷이라는 뜻.
           (알림은 보통 스킵하고, 대시보드 초기 상태 채우기에만 사용)
+
+        on_event 가 코루틴을 반환하면 await 한다. 종목명 조회처럼 시간이 걸리는
+        작업을 콜백이 비동기로 처리해도 이벤트 루프(웹서버 등)가 멈추지 않는다.
         """
+        async def dispatch(*args):
+            res = on_event(*args)
+            if asyncio.iscoroutine(res):
+                await res
+
         while True:
             msg = await self._recv()
             trnm = msg.get("trnm")
@@ -170,7 +178,7 @@ class KiwoomConditionClient:
                 for item in msg.get("data") or []:
                     code = _extract_code(item)
                     if code:
-                        on_event(seq, name, code, SIGNAL_INSERT, "", True)
+                        await dispatch(seq, name, code, SIGNAL_INSERT, "", True)
                 continue
 
             if trnm != "REAL":
@@ -187,4 +195,4 @@ class KiwoomConditionClient:
                 if not code or signal not in (SIGNAL_INSERT, SIGNAL_DELETE):
                     continue
                 name = seq_to_name.get(seq, f"조건#{seq}")
-                on_event(seq, name, code, signal, ts, False)
+                await dispatch(seq, name, code, signal, ts, False)
