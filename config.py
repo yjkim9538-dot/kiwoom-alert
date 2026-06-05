@@ -101,7 +101,12 @@ def load_settings(env_path: Path = None, config_path: Path = None) -> Settings:
             f"notify_on 값이 잘못됐습니다: {raw.get('notify_on')!r} (insert/delete 만 가능)"
         )
 
-    conditions = [str(c).strip() for c in (raw.get("conditions") or []) if str(c).strip()]
+    # conditions 는 리스트여야 하지만, 사용자가 "conditions: 골든크로스" 처럼
+    # 한 줄 문자열로 적으면 문자열이 글자 단위로 쪼개진다. 문자열이면 한 항목으로 감싼다.
+    raw_conditions = raw.get("conditions") or []
+    if isinstance(raw_conditions, str):
+        raw_conditions = [raw_conditions]
+    conditions = [str(c).strip() for c in raw_conditions if str(c).strip()]
     watchlist = _parse_watchlist(raw.get("watchlist") or [])
 
     dashboard_port = raw.get("dashboard_port", 8765)
@@ -143,6 +148,8 @@ def _parse_watchlist(items) -> dict:
       - "005930"            (코드만 — 이름은 실시간 조회로 채워짐)
       - {code: "005930", name: "삼성전자"}
     """
+    if isinstance(items, str):  # "watchlist: 005930" 처럼 한 줄로 적은 경우 방어
+        items = [items]
     result = {}
     for item in items:
         if isinstance(item, dict):
