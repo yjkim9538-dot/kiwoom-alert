@@ -43,6 +43,28 @@ class TelegramNotifier:
         self.send(f"{emoji} [{condition_name}] {stock} {label}{when}")
 
 
+class NullNotifier:
+    """텔레그램을 끈 경우 쓰는 무동작 알림기.
+
+    enable_telegram=false (대시보드 전용 운영, 또는 텔레그램이 차단된 망)일 때
+    TelegramNotifier 대신 주입한다. 인터페이스는 동일하되 아무 것도 보내지 않는다.
+    """
+
+    def send(self, text: str) -> bool:
+        return True
+
+    def notify_event(self, *args, **kwargs):
+        return None
+
+
+def make_notifier(settings):
+    """설정에 따라 텔레그램 알림기 또는 무동작 알림기를 만든다."""
+    if getattr(settings, "enable_telegram", True):
+        return TelegramNotifier(settings.telegram_bot_token, settings.telegram_chat_id)
+    log.info("텔레그램 알림 비활성화(enable_telegram=false) — 대시보드만 동작합니다.")
+    return NullNotifier()
+
+
 def _fmt_time(ts: str) -> str:
     """체결시간 HHMMSS → ' (HH:MM:SS)'. 비면 현재시각."""
     digits = "".join(ch for ch in ts if ch.isdigit())

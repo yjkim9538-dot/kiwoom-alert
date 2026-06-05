@@ -12,7 +12,7 @@ import logging
 import sys
 
 from config import ConfigError, load_settings
-from notifier import TelegramNotifier
+from notifier import make_notifier
 from runner import Runner
 
 logging.basicConfig(
@@ -32,7 +32,7 @@ def main():
 
     log.info("환경: %s | 감시 조건: %s",
              settings.environment, settings.conditions or "(전체)")
-    notifier = TelegramNotifier(settings.telegram_bot_token, settings.telegram_chat_id)
+    notifier = make_notifier(settings)
 
     def on_event(ev):
         if ev.initial:
